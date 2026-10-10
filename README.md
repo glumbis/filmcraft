@@ -10,6 +10,15 @@
 
 <h1 align="center">FilmCraft</h1>
 
+> [!IMPORTANT]
+> ### 🔌 This fork adds OpenFX plug-in support
+> Run **OpenFX (OFX) plug-ins** inside FilmCraft as ordinary video effects, for example
+> **RE:Vision ReelSmart Motion Blur**, **RE:Vision Twixtor** and **Boris FX Sapphire**.
+> Unofficial; may be proposed upstream later.
+>
+> **[⬇ Download for Windows](https://github.com/glumbis/filmcraft/releases/latest)** ·
+> **[Getting started](FORK.md)** · **[How it works](docs/ofx.md)**
+
 <p align="center">
   <b>Video editing, color and sound; an open-source, clean-room reimplementation of Adobe Premiere Pro, rebuilt in pure Rust.</b>
 </p>

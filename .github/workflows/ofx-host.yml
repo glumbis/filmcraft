@@ -1,0 +1,107 @@
+# CI for the OpenFX fork (branch `openfx`, see FORK.md): builds the test OFX plug-in, runs the OFX
+# integration tests against it, and packages the Windows x64 build with `--features openfx` as
+# FilmCraft-OFX-windows.zip. Run it by hand (workflow_dispatch) to get the zip as an artifact, or
+# push a tag like `v0.5.0-ofx.1` to also attach it to the GitHub release for that tag.
+name: OFX host
+
+on:
+  push:
+    tags: ["v*-ofx*"]
+  workflow_dispatch:
+
+concurrency:
+  group: ofx-host-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  windows:
+    name: Windows x64 (test, build, package)
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      # Fonts (optional build input, required for releases): docs/contributing.md#building-with-craft-fonts
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: storytold/craft-fonts
+          ref: abb83316d96aa59c1cf64784289e378fe9fa5695 # bump deliberately
+          path: craft-fonts
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ofx-host-windows
+          workspaces: |
+            .
+            examples/ofx/fc-test-ofx
+      - name: Build the test OFX plug-in and lay out its bundle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo build --release --manifest-path examples/ofx/fc-test-ofx/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
+          $dir = 'target/ofx-test/fc-test-ofx.ofx.bundle/Contents/Win64'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          Copy-Item examples/ofx/fc-test-ofx/target/release/fc_test_ofx.dll "$dir/fc-test-ofx.ofx"
+      - name: Test
+        shell: pwsh
+        env:
+          FC_TEST_OFX_BUNDLE: ${{ github.workspace }}\target\ofx-test\fc-test-ofx.ofx.bundle
+        run: |
+          cargo test -p filmcraft-ofx
+          if ($LASTEXITCODE -ne 0) { throw "cargo test failed" }
+      - name: Build the release binaries
+        shell: pwsh
+        env:
+          CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+          CRAFT_FONTS_REQUIRED: "1"
+        run: |
+          cargo build --release -p filmcraft -p filmcraft-cli --features openfx
+          if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
+      - name: Collect the zip
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $out = 'dist/FilmCraft-OFX'
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Copy-Item target/release/filmcraft.exe, target/release/filmcraft-cli.exe, README.md, FORK.md, LICENSE-MIT, LICENSE-APACHE, NOTICE $out
+          Copy-Item tools/fork-installer/* $out
+          Copy-Item target/ofx-test/fc-test-ofx.ofx.bundle $out -Recurse
+          Compress-Archive -Path $out -DestinationPath dist/FilmCraft-OFX-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: filmcraft-ofx-windows
+          path: dist/FilmCraft-OFX-windows.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Attach to the GitHub release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: windows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: filmcraft-ofx-windows
+          path: dist
+      - name: Create the release if needed and upload the zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --title "FilmCraft with OpenFX $TAG" \
+              --notes "Unofficial FilmCraft build with OpenFX plug-in support. See FORK.md for getting started." \
+              --prerelease
+          fi
+          gh release upload "$TAG" dist/FilmCraft-OFX-windows.zip --clobber
