@@ -26,6 +26,7 @@ pub mod mixer;
 pub mod multicam;
 pub mod offline;
 pub mod plan;
+pub mod plugin_fx;
 pub mod preview;
 pub mod remix;
 pub mod scene;

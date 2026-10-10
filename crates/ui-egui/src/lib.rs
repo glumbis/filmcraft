@@ -1078,6 +1078,22 @@ impl FilmcraftApp {
                 let Some(path) = paths.into_iter().next() else { return Ok(Value::Null) };
                 self.session.execute("graphics.newFromFile", json!({"path": path})).map_err(|e| e.to_string())
             }
+            // File ▸ Load OpenFX Plug-in…: the `.ofx` binary inside `X.ofx.bundle/Contents/<platform>`
+            "effects.plugins.loadOfx" => {
+                filmcraft_engine::find_command(id).map_or(Ok(()), |c| (c.enabled)(&self.session))?;
+                let Some(path) = self.hooks.pick_open_file.as_mut().and_then(|f| f(tl!("OpenFX Plug-in"), &["ofx"])) else { return Ok(Value::Null) };
+                let r = self.session.execute(id, json!({"path": path})).map_err(|e| e.to_string());
+                match &r {
+                    Err(e) => self.ui.status = e.clone(),
+                    Ok(v) => {
+                        let errs: Vec<&str> = v.get("errors").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
+                        if !errs.is_empty() {
+                            self.ui.status = errs.join("; ");
+                        }
+                    }
+                }
+                r
+            }
             "captions.import" => {
                 let paths = self.hooks.pick_files.as_mut().map(|f| f(&["srt", "vtt", "scc", "mcc", "stl", "ttml", "dfxp", "xml"])).unwrap_or_default();
                 let Some(path) = paths.into_iter().next() else { return Ok(Value::Null) };

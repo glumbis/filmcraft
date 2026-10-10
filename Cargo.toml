@@ -54,6 +54,7 @@ filmcraft-ui-egui = { path = "crates/ui-egui" }
 filmcraft-automation = { path = "crates/automation" }
 filmcraft-platform = { path = "crates/platform" }
 filmcraft-testkit = { path = "crates/testkit" }
+filmcraft-ofx = { path = "crates/ofx" }
 
 # foundation
 thiserror = "2"
@@ -63,6 +64,8 @@ log = "0.4"
 rayon = "1"
 proptest = "1"
 roxmltree = "0.21"
+# Loads native OpenFX plug-in binaries (crates/ofx only; ISC)
+libloading = "0.8"
 
 # ui
 egui = "0.36"

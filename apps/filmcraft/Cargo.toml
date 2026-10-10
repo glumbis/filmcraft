@@ -14,6 +14,8 @@ workspace = true
 default = []
 # Speech-to-text (Text panel ▸ Transcribe) with Whisper on the CPU, and model downloads.
 whisper = ["filmcraft-engine/whisper", "filmcraft-engine/speech-download"]
+# OpenFX image-effect plug-ins (docs/ofx.md): native code run in-process without a sandbox. Off by default.
+openfx = ["dep:filmcraft-ofx"]
 
 [dependencies]
 filmcraft-engine = { workspace = true }
@@ -39,3 +41,7 @@ winit = { version = "0.30", default-features = false }
 # Icon + VERSIONINFO for filmcraft.exe (build.rs); only needed when building on Windows.
 [target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"
+
+# OpenFX plug-ins are native code: opt-in (`openfx`), never on the web build.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+filmcraft-ofx = { workspace = true, optional = true }

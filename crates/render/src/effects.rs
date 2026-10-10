@@ -90,6 +90,10 @@ pub fn apply(img: &mut Image, e: &EffectInstance, cx: &FxCtx) {
     if !e.enabled || img.w == 0 || img.h == 0 {
         return;
     }
+    // registered plug-in effects (OpenFX…): CPU only, never in the GPU plan (`gpufx`)
+    if crate::plugin_fx::apply(img, e, cx) {
+        return;
+    }
     if crate::vfx::apply(img, e, cx) {
         return;
     }

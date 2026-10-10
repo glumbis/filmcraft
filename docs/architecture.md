@@ -23,7 +23,7 @@ Design principles:
  L6  apps/filmcraft · apps/filmcraft-cli · apps/filmcraft-web
  L5  ui-egui · automation · platform
  L4  engine
- L3  render · gpu · export · golden (test-only)
+ L3  render · gpu · export · ofx (opt-in) · golden (test-only)
  L2  edit · codecs · interchange · captions · speech
  L1  frame · media · project · audio-dsp · text
  L0  foundation: time · geom · color · bitstream · testkit (dev-dependency only)
@@ -66,6 +66,7 @@ and `filmcraft-cli`.
 | `interchange` | L2 | EDL, FCP7 XML, FCPXML, OTIO, AAF (on `cfb`) and OMF 2.0 import/export (no file I/O; the engine supplies rendered audio essence) ([README](../crates/interchange/README.md)) |
 | `render` | L3 | sequence evaluation, CPU compositor, video effects (`effects`, `vfx`; effects needing other frames or tracks read them through `vfx::FxEnv`), transitions, audio mix |
 | `gpu` | L3 | wgpu compositor (WGSL) |
+| `ofx` | L3 | opt-in OpenFX plug-in host (feature `openfx`, off by default): loads native OFX image effects as video effects over the C ABI; the second crate allowed `unsafe` ([ofx.md](ofx.md)) |
 | `golden` | L3 | test-only: golden-image tests of the CPU renderer and GPU-vs-CPU parity; empty library, dev-dependencies only |
 | `scopes` | L3 | video scope maths: waveform, parade, histogram, YUV / HLS vectorscopes, numeric summaries ([crates/scopes/README.md](../crates/scopes/README.md)) |
 | `export` | L3 | render → encode → mux pipeline, progress/cancel |
@@ -94,7 +95,8 @@ are exempt):
 `cargo xtask wasm` runs `cargo check --target wasm32-unknown-unknown` on every L0–L4 crate, the
 egui UI and the web app, so everything up to the engine stays web-portable and the web app builds
 ([web.md](web.md)). `unsafe_code = "forbid"` applies workspace-wide, except in `platform`
-(`deny`, allowed only on its FFI modules; [ADR 0001](adr/0001-platform-ffi.md)).
+(`deny`, allowed only on its FFI modules; [ADR 0001](adr/0001-platform-ffi.md)) and the opt-in
+`ofx` crate ([ofx.md](ofx.md)).
 
 ## 2. Time base
 

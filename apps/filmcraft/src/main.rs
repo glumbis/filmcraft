@@ -141,6 +141,10 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |cc| {
             let mut session = Session::default();
+            // OpenFX plug-ins register their effects before any project is opened or recovered,
+            // so projects that use them find them (`openfx` builds only).
+            #[cfg(feature = "openfx")]
+            setup_ofx(&mut session, data_dir.clone().or_else(default_data_dir));
             if let Some(dir) = data_dir.clone().or_else(default_data_dir) {
                 let mut cfg = AutosaveConfig::new(dir);
                 cfg.local_offset = local_offset;
@@ -291,6 +295,34 @@ fn open_path(path: &str, reveal: bool) -> Result<(), String> {
         c
     };
     cmd.spawn().map(|_| ()).map_err(|e| format!("can't open {path}: {e}"))
+}
+
+/// OpenFX plug-ins (`openfx` feature, docs/ofx.md): install the loader, remember plug-ins that
+/// crash while loading in the data folder, and load everything in the standard OFX folders and
+/// `OFX_PLUGIN_PATH` unless `FILMCRAFT_NO_OFX=1`. Problems go to the log (and standard error).
+#[cfg(feature = "openfx")]
+fn setup_ofx(session: &mut Session, data_dir: Option<std::path::PathBuf>) {
+    session.ofx_loader = Some(filmcraft_ofx::loader);
+    session.ofx_search_paths = filmcraft_ofx::default_search_paths();
+    session.ofx_clear_blocklist = Some(filmcraft_ofx::blocklist::clear);
+    // a plug-in that crashed the app while loading is remembered here and skipped next time
+    if let Some(dir) = data_dir {
+        filmcraft_ofx::blocklist::set_state_dir(dir);
+    }
+    if std::env::var_os("FILMCRAFT_NO_OFX").is_some_and(|v| v == "1") {
+        log::info!("OpenFX: FILMCRAFT_NO_OFX=1, plug-ins not scanned");
+        return;
+    }
+    match session.execute("effects.plugins.scanOfx", json!({})) {
+        Ok(r) => {
+            let n = r["loaded"].as_array().map_or(0, Vec::len);
+            log::info!("OpenFX: {n} effect(s) loaded from {}", r["paths"]);
+            for e in r["errors"].as_array().into_iter().flatten() {
+                log::warn!("OpenFX: {}", e.as_str().unwrap_or("error"));
+            }
+        }
+        Err(e) => log::warn!("OpenFX: {e}"),
+    }
 }
 
 /// Put the OS hardware video decoders in front of our own. Registered in a statement of its own:

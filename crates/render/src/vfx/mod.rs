@@ -60,6 +60,16 @@ pub trait FxEnv: Sync {
     fn source_size(&self) -> (u32, u32);
     /// Identity of the clip and its source range (cache key for analyses).
     fn clip_key(&self) -> u64;
+    /// The keyframe clock ([`FxCtx::t`]) `dt` timeline seconds from now (speed, reverse and
+    /// frame holds applied); `None` when unknown.
+    fn effect_time(&self, _dt: f64) -> Option<Tick> {
+        None
+    }
+    /// The position of `e` (by identity) among the clip's effects with the same effect id: 0 for
+    /// the first Gaussian Blur, 1 for the second… `None` when `e` is not one of the clip's.
+    fn effect_ordinal(&self, _e: &EffectInstance) -> Option<usize> {
+        None
+    }
 }
 
 /// The environment of a track item being rendered by [`crate::item_layer`].
@@ -172,6 +182,25 @@ impl FxEnv for ItemEnv<'_> {
             h = (h ^ v).wrapping_mul(0x0100_0000_01b3);
         }
         h
+    }
+    fn effect_time(&self, dt: f64) -> Option<Tick> {
+        if !dt.is_finite() {
+            return None;
+        }
+        let t2 = Tick(self.t.0.saturating_add(Tick::from_seconds_f64(dt).0));
+        Some(self.item.effect_time_at(t2))
+    }
+    fn effect_ordinal(&self, e: &EffectInstance) -> Option<usize> {
+        let mut n = 0;
+        for x in &self.item.effects {
+            if std::ptr::eq(x, e) {
+                return Some(n);
+            }
+            if x.effect == e.effect {
+                n += 1;
+            }
+        }
+        None
     }
 }
 

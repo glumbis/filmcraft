@@ -1672,6 +1672,7 @@ dependencies = [
  "eframe",
  "egui",
  "filmcraft-engine",
+ "filmcraft-ofx",
  "filmcraft-platform",
  "filmcraft-ui-egui",
  "log",
@@ -1782,6 +1783,7 @@ dependencies = [
  "filmcraft-media",
  "filmcraft-mpegts",
  "filmcraft-mxf",
+ "filmcraft-ofx",
  "filmcraft-ogg",
  "filmcraft-platform",
  "filmcraft-time",
@@ -2084,6 +2086,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "filmcraft-ofx"
+version = "0.5.0"
+dependencies = [
+ "filmcraft-project",
+ "libloading",
+ "log",
+ "serde_json",
+]
+
+[[package]]
 name = "filmcraft-ogg"
 version = "0.5.0"
 dependencies = [
@@ -2161,6 +2173,7 @@ dependencies = [
  "filmcraft-text",
  "filmcraft-time",
  "image",
+ "log",
  "rayon",
  "rustix 1.1.5",
  "serde",

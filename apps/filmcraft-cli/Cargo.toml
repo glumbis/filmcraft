@@ -16,6 +16,8 @@ path = "src/main.rs"
 default = []
 # Speech-to-text (Text panel ▸ Transcribe) with Whisper on the CPU, and model downloads.
 whisper = ["filmcraft-engine/whisper", "filmcraft-engine/speech-download"]
+# OpenFX image-effect plug-ins (docs/ofx.md): native code run in-process without a sandbox. Off by default.
+openfx = ["dep:filmcraft-ofx"]
 
 [dependencies]
 filmcraft-engine = { workspace = true }
@@ -29,3 +31,7 @@ filmcraft-time = { workspace = true }
 filmcraft-automation = { workspace = true }
 serde_json = { workspace = true }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+# OpenFX plug-ins are native code: opt-in (`openfx`), never on the web build.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+filmcraft-ofx = { workspace = true, optional = true }

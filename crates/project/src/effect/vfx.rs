@@ -54,7 +54,8 @@ fn blend_orig() -> ParamDef {
 }
 
 /// Default position of auto (NaN) point parameters, as fractions of the frame, where the frame
-/// centre is not right (Corner Pin corners, gradient ends, Lightning endpoints…).
+/// centre is not right (Corner Pin corners, gradient ends, Lightning endpoints…), and the
+/// declared defaults of registered plug-ins' point parameters.
 pub fn auto_point(effect: &str, param: &str) -> Option<(f64, f64)> {
     Some(match (effect, param) {
         ("corner_pin", "upper_left") => (0.0, 0.0),
@@ -68,7 +69,7 @@ pub fn auto_point(effect: &str, param: &str) -> Option<(f64, f64)> {
         ("checkerboard", "anchor") => (0.0, 0.0),
         ("write_on", "brush") => (0.5, 0.5),
         ("volumetric_rays", "center") => (0.5, 0.25),
-        _ => return None,
+        _ => return crate::plugin::plugin_auto_point(effect, param),
     })
 }
 

@@ -31,6 +31,7 @@ pub mod mixer;
 pub mod multicam;
 pub mod panels;
 pub mod perf;
+pub mod plugins;
 pub mod presets;
 pub mod previews;
 pub mod project_manager;
@@ -376,9 +377,23 @@ pub struct Session {
     pub log: panels::EventLog,
     /// Media Browser navigation (directory, back / forward history, selected files).
     pub browser: media_browser::BrowserState,
+    /// Loads OpenFX plug-ins (apps built with the `openfx` feature link `filmcraft-ofx`):
+    /// `effects.plugins.loadOfx`, `effects.plugins.scanOfx`. `None` = not available in this build.
+    pub ofx_loader: Option<OfxLoader>,
+    /// Where `effects.plugins.scanOfx` looks for OpenFX plug-ins (the host's defaults: the
+    /// standard OFX folders and `OFX_PLUGIN_PATH`).
+    pub ofx_search_paths: Vec<std::path::PathBuf>,
+    /// Forgets the OpenFX crash blocklist (plug-ins skipped because they crashed the app while
+    /// loading): `effects.plugins.scanOfx {"retry": true}`.
+    pub ofx_clear_blocklist: Option<fn()>,
     /// Nesting depth of [`Session::execute`] (commands that run other commands).
     exec_depth: u32,
 }
+
+/// Loads OpenFX plug-ins from a path (an `.ofx` binary, an `.ofx.bundle` folder, or a folder
+/// scanned recursively) into the effect registry and describes them
+/// (`{loaded: [{id, name, category, ofxId, context, bundle}], errors: [..]}`).
+pub type OfxLoader = fn(&str) -> std::result::Result<Value, String>;
 
 /// An export advanced a batch at a time on the host's thread ([`Session::pump_jobs`]).
 pub struct SteppedJob {
@@ -464,6 +479,9 @@ impl Session {
             transcriber: None,
             log: Default::default(),
             browser: Default::default(),
+            ofx_loader: None,
+            ofx_search_paths: Vec::new(),
+            ofx_clear_blocklist: None,
             exec_depth: 0,
         }
     }
@@ -1072,6 +1090,8 @@ mod nest_fidelity_tests;
 mod nesting_tests;
 #[cfg(test)]
 mod panels_tests;
+#[cfg(test)]
+mod plugins_tests;
 #[cfg(test)]
 mod presets_tests;
 #[cfg(test)]

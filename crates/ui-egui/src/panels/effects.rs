@@ -32,7 +32,8 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
     let mut bui = ui.new_child(egui::UiBuilder::new().max_rect(body).id_salt("fx-body"));
     bui.set_clip_rect(body);
     let filter = q.to_lowercase();
-    let defs = filmcraft_project::effect_defs();
+    // built-ins and registered plug-ins (OpenFX…: Video Effects ▸ the plug-in's own group)
+    let defs = filmcraft_project::all_effect_defs();
     // folder tree: top-level categories in Premiere's order
     let tops = filmcraft_project::vtransition::EFFECT_TOP_FOLDERS;
     let mut apply: Option<String> = None;

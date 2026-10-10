@@ -185,6 +185,10 @@ pub fn show(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
                     custom_setup_row(app, bui, body, clip, idx, &e.effect);
                 }
                 for pd in &def.params {
+                    // opaque plug-in data: stored and saved, never shown
+                    if pd.kind == ParamKind::Hidden {
+                        continue;
+                    }
                     param_row(app, bui, body, clip, idx, e, None, pd, mt_now, &mut actions, &lane, &lx, it);
                     if app.ui.expanded_fx.contains(&graph_key(clip, idx, pd.id))
                         && let Some(param) = e.params.get(pd.id)
@@ -627,7 +631,7 @@ pub fn lumetri_panel(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
     let mut actions = Vec::new();
     egui::ScrollArea::vertical().auto_shrink([false, false]).show(&mut bui, |ui| {
         let mut groups: Vec<&str> = Vec::new();
-        for p in &def.params {
+        for p in def.params.iter().filter(|p| p.kind != ParamKind::Hidden) {
             if let Some(g) = p.group
                 && !groups.contains(&g)
             {
@@ -649,7 +653,7 @@ pub fn lumetri_panel(app: &mut FilmcraftApp, ui: &mut egui::Ui, rect: Rect) {
             if !now_open {
                 continue;
             }
-            for pd in def.params.iter().filter(|p| p.group == Some(g)) {
+            for pd in def.params.iter().filter(|p| p.group == Some(g) && p.kind != ParamKind::Hidden) {
                 let v = e.params.get(pd.id).map(|p| p.value_at(mt)).unwrap_or(pd.default.clone());
                 ui.horizontal(|ui| {
                     ui.add_space(18.0);

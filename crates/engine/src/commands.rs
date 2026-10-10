@@ -214,7 +214,7 @@ fn resolve_effect_name(s: &Session, p: &Value, name: &str) -> Option<&'static fi
         return Some(d);
     }
     let n = name.to_ascii_lowercase();
-    let cands: Vec<_> = filmcraft_project::effect_defs().iter().filter(|e| e.name.to_ascii_lowercase() == n).collect();
+    let cands: Vec<_> = filmcraft_project::all_effect_defs().into_iter().filter(|e| e.name.to_ascii_lowercase() == n).collect();
     if cands.len() <= 1 {
         return cands.first().copied().or_else(|| filmcraft_project::find_effect(&n));
     }
@@ -2681,6 +2681,9 @@ fn build() -> Vec<CommandSpec> {
         )),
     ];
     crate::sequence_tools::splice(&mut v);
+    // File ▸ Load OpenFX Plug-in… right after Import…
+    let at = v.iter().position(|c| c.id == "file.import").map_or(v.len(), |i| i + 1);
+    v.splice(at..at, crate::plugins::commands());
     v.extend(crate::captions::commands());
     v.extend(crate::settings::commands());
     v.extend(crate::mixer::commands());
@@ -3103,8 +3106,8 @@ fn list_effects(p: &Value) -> Value {
     let kind = str_p(p, "kind");
     let folder = str_p(p, "folder");
     let detail = p.get("detail").and_then(Value::as_bool).unwrap_or(false);
-    let out = filmcraft_project::effect_defs()
-        .iter()
+    let out = filmcraft_project::all_effect_defs()
+        .into_iter()
         .filter(|d| kind.is_none_or(|k| format!("{:?}", d.kind).eq_ignore_ascii_case(k)))
         .filter(|d| folder.is_none_or(|f| d.category.join("/").starts_with(f)))
         .map(|d| {
@@ -3149,6 +3152,11 @@ fn param_info(p: &filmcraft_project::ParamDef) -> Value {
         K::Curve { .. } => "curve",
         K::Wheel => "wheel",
         K::Path => "path",
+        K::Hidden => {
+            // opaque plug-in data (can be megabytes): not listed
+            j["default"] = Value::Null;
+            "hidden"
+        }
     };
     j["type"] = json!(ty);
     j

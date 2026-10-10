@@ -150,10 +150,14 @@ impl Backend {
             return Backend::Bridge(BridgeClient::new(addr).unwrap_or_else(|e| usage(e)));
         }
         let mut s = Session::default();
+        let data_dir = a.opt("--data-dir").map(std::path::PathBuf::from).or_else(filmcraft_engine::autosave::default_data_dir);
         // user export presets (and other per-user libraries) from the data directory
-        if let Some(dir) = a.opt("--data-dir").map(std::path::PathBuf::from).or_else(filmcraft_engine::autosave::default_data_dir) {
-            s.export_presets.set_dir(&dir);
+        if let Some(dir) = &data_dir {
+            s.export_presets.set_dir(dir);
         }
+        // OpenFX plug-ins before the project opens, so its plug-in effects resolve
+        #[cfg(feature = "openfx")]
+        setup_ofx(&mut s, data_dir);
         if let Some(p) = a.opt("--project") {
             if let Err(e) = s.execute("file.open", json!({"path": p})) {
                 fail(e);
@@ -210,6 +214,30 @@ fn format_for(path: &str) -> Option<&'static str> {
         "aif" | "aiff" => "aiff",
         _ => return None,
     })
+}
+
+/// OpenFX plug-ins (`openfx` feature, docs/ofx.md), as in the desktop app: install the loader,
+/// keep the crash blocklist in the data directory, and load the plug-ins in the standard OFX
+/// folders and `OFX_PLUGIN_PATH` unless `FILMCRAFT_NO_OFX=1`. Problems go to standard error.
+#[cfg(feature = "openfx")]
+fn setup_ofx(s: &mut Session, data_dir: Option<std::path::PathBuf>) {
+    s.ofx_loader = Some(filmcraft_ofx::loader);
+    s.ofx_search_paths = filmcraft_ofx::default_search_paths();
+    s.ofx_clear_blocklist = Some(filmcraft_ofx::blocklist::clear);
+    if let Some(dir) = data_dir {
+        filmcraft_ofx::blocklist::set_state_dir(dir);
+    }
+    if std::env::var_os("FILMCRAFT_NO_OFX").is_some_and(|v| v == "1") {
+        return;
+    }
+    match s.execute("effects.plugins.scanOfx", json!({})) {
+        Ok(r) => {
+            for e in r["errors"].as_array().into_iter().flatten() {
+                eprintln!("filmcraft-cli: OpenFX: {}", e.as_str().unwrap_or("error"));
+            }
+        }
+        Err(e) => eprintln!("filmcraft-cli: OpenFX: {e}"),
+    }
 }
 
 /// OS hardware video decoders (VideoToolbox on macOS, Media Foundation on Windows) in front of our
@@ -555,5 +583,54 @@ mod format_tests {
         assert_eq!(super::format_for("out/clip.MXF"), Some("mxf-op1a"));
         assert_eq!(super::format_for("a.mov"), Some("prores"));
         assert_eq!(super::format_for("noext"), None);
+    }
+}
+
+/// End to end with a real OpenFX plug-in: the `fc-test-ofx` bundle (docs/ofx.md ▸ Testing the
+/// host) named by `FC_TEST_OFX_BUNDLE`; without it the test notes that and passes.
+#[cfg(all(test, feature = "openfx"))]
+mod ofx_tests {
+    use filmcraft_engine::Session;
+    use serde_json::json;
+
+    fn centre(s: &Session) -> [u8; 3] {
+        let img = s.render_program(1.0).unwrap();
+        let px = img.to_rgba8();
+        let i = ((img.h / 2) * img.w + img.w / 2) * 4;
+        [px[i], px[i + 1], px[i + 2]]
+    }
+
+    #[test]
+    fn an_ofx_effect_renders_on_a_clip() {
+        let Some(bundle) = std::env::var_os("FC_TEST_OFX_BUNDLE") else {
+            eprintln!("FC_TEST_OFX_BUNDLE is not set: skipping the OpenFX end-to-end test");
+            return;
+        };
+        // the loader only (no scan of the installed plug-ins)
+        let mut s = Session::default();
+        s.ofx_loader = Some(filmcraft_ofx::loader);
+        let r = s.execute("effects.plugins.loadOfx", json!({"path": bundle.to_string_lossy()})).unwrap();
+        let ids: Vec<&str> = r["loaded"].as_array().unwrap().iter().filter_map(|e| e["id"].as_str()).collect();
+        assert!(ids.contains(&"org.filmcraft.test.invert"), "{r}");
+        let listed = s.execute("effects.list", json!({"folder": "Video Effects"})).unwrap();
+        assert!(listed.as_array().unwrap().iter().any(|e| e["name"] == "FC Test Invert"), "listed under Video Effects");
+
+        let matte = s.execute("file.newColorMatte", json!({"color": "#c86432", "seconds": 2, "width": 64, "height": 36})).unwrap()["item"].as_u64().unwrap();
+        s.execute("file.newSequenceFromClip", json!({"items": [matte]})).unwrap();
+        let clip = s.active_sequence().unwrap().video_tracks[0].items[0].id.0;
+        assert_eq!(centre(&s), [200, 100, 50]);
+        s.execute("effects.apply", json!({"clips": [clip], "effect": "FC Test Invert"})).unwrap();
+        assert_eq!(centre(&s), [55, 155, 205], "inverted (in sRGB) by the OFX plug-in");
+        // half strength through Effect Controls' command: 50 % grey-ish mix
+        s.execute("effects.setParam", json!({"clip": clip, "effect": "org.filmcraft.test.invert", "param": "amount", "value": 0.5})).unwrap();
+        let half = centre(&s);
+        assert!(half.iter().all(|v| (126..=129).contains(v)), "{half:?}");
+        // the temporal plug-in (Source at t and t - 1) and the padding one render without trouble
+        s.execute("effects.setParam", json!({"clip": clip, "effect": "org.filmcraft.test.invert", "param": "amount", "value": 1.0})).unwrap();
+        for id in ["org.filmcraft.test.echo", "org.filmcraft.test.border"] {
+            s.execute("effects.apply", json!({"clips": [clip], "effect": id})).unwrap();
+            s.set_playhead(filmcraft_time::Tick::from_seconds_f64(1.0));
+            assert_eq!(centre(&s), [55, 155, 205], "{id}");
+        }
     }
 }

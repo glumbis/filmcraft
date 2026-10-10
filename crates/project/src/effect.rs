@@ -52,6 +52,9 @@ pub enum ParamKind {
     Wheel,
     /// A mask path (edited on the Program monitor).
     Path,
+    /// Opaque plug-in data: stored and saved but not shown (a plug-in's hidden string
+    /// parameters, see [`crate::plugin`]).
+    Hidden,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize)]
@@ -856,14 +859,23 @@ pub fn effect_defs() -> &'static [EffectDef] {
     DEFS.get_or_init(build_effects)
 }
 
-pub fn find_effect(id: &str) -> Option<&'static EffectDef> {
-    effect_defs().iter().find(|e| e.id == id)
+/// Every effect definition: the built-ins ([`effect_defs`]) then the registered plug-ins
+/// ([`crate::plugin::plugin_defs`], in registration order).
+pub fn all_effect_defs() -> Vec<&'static EffectDef> {
+    let mut v: Vec<&'static EffectDef> = effect_defs().iter().collect();
+    v.extend(crate::plugin::plugin_defs());
+    v
 }
 
-/// Case-insensitive lookup by id or display name.
+/// The definition of a built-in or registered plug-in effect (built-ins first).
+pub fn find_effect(id: &str) -> Option<&'static EffectDef> {
+    effect_defs().iter().find(|e| e.id == id).or_else(|| crate::plugin::plugin_def(id))
+}
+
+/// Case-insensitive lookup by id or display name (built-ins first, then plug-ins).
 pub fn find_effect_by_name(name: &str) -> Option<&'static EffectDef> {
-    let n = name.to_ascii_lowercase();
-    effect_defs().iter().find(|e| e.id == n || e.name.to_ascii_lowercase() == n)
+    let hit = |e: &EffectDef| e.id.eq_ignore_ascii_case(name) || e.name.eq_ignore_ascii_case(name);
+    effect_defs().iter().find(|e| hit(e)).or_else(|| crate::plugin::plugin_defs().into_iter().find(|e| hit(e)))
 }
 
 /// Intrinsic video effects every video track item carries (Motion, Opacity, Time Remapping).
